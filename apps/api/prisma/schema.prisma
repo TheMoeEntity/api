@@ -1,0 +1,183 @@
+// ─────────────────────────────────────────────────────────────
+// Refund Desk — data model
+//
+// Three groups of tables:
+//   1. Source of truth  (Customer, Order, OrderItem)  → the "CRM"
+//   2. The request      (RefundRequest, RefundRequestItem)
+//   3. The paper trail  (DecisionAudit, ReviewAction) → insert-only
+//
+// Money is always stored as integer cents. Floats can't represent
+// 0.1 exactly; a ledger that drifts by a kobo is a ledger nobody trusts.
+// ─────────────────────────────────────────────────────────────
+
+generator client {
+  provider     = "prisma-client"
+  output       = "../src/generated/prisma"
+  moduleFormat = "esm"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// Enum values mirror packages/shared/src/constants/refund.constants.ts.
+// A compile-time check in the API fails the build if they drift.
+
+enum OrderStatus {
+  PROCESSING
+  SHIPPED
+  DELIVERED
+  CANCELLED
+}
+
+enum RefundVerdict {
+  APPROVED
+  DENIED
+  ESCALATED
+}
+
+enum RefundStatus {
+  DECIDED
+  PENDING_REVIEW
+  RESOLVED
+}
+
+enum ReasonCategory {
+  DAMAGED
+  WRONG_ITEM
+  NOT_AS_DESCRIBED
+  NOT_RECEIVED
+  CHANGED_MIND
+  OTHER
+}
+
+enum ReviewDecision {
+  APPROVE
+  DENY
+}
+
+// ─── 1. Source of truth ──────────────────────────────────────
+
+model Customer {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String
+  email     String   @unique
+  createdAt DateTime @default(now())
+
+  orders         Order[]
+  refundRequests RefundRequest[]
+}
+
+model Order {
+  id          String      @id @default(uuid()) @db.Uuid
+  // Human-facing identifier customers see on receipts ("WN-1001").
+  // Also gives the seed a stable natural key to be idempotent against.
+  orderNumber String      @unique
+  customerId  String      @db.Uuid
+  status      OrderStatus
+  currency    String      @default("USD") @db.Char(3)
+  placedAt    DateTime
+  deliveredAt DateTime?
+
+  customer       Customer        @relation(fields: [customerId], references: [id])
+  items          OrderItem[]
+  refundRequests RefundRequest[]
+
+  @@index([customerId, placedAt])
+}
+
+model OrderItem {
+  id             String  @id @default(uuid()) @db.Uuid
+  orderId        String  @db.Uuid
+  sku            String
+  name           String
+  unitPriceCents Int
+  quantity       Int
+  isFinalSale    Boolean @default(false)
+
+  order         Order               @relation(fields: [orderId], references: [id])
+  refundedLines RefundRequestItem[]
+
+  @@index([orderId])
+}
+
+// ─── 2. The request ──────────────────────────────────────────
+
+model RefundRequest {
+  id             String          @id @default(uuid()) @db.Uuid
+  // Client-generated per submission. A retried or double-clicked submit
+  // hits the unique constraint instead of creating a second refund.
+  idempotencyKey String          @unique @db.Uuid
+  customerId     String          @db.Uuid
+  orderId        String          @db.Uuid
+  message        String          @db.Text
+  // Computed server-side from OrderItem prices, never sent by the client.
+  amountCents    Int
+  reasonCategory ReasonCategory?
+  verdict        RefundVerdict
+  status         RefundStatus
+  customerReply  String          @db.Text
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  customer      Customer            @relation(fields: [customerId], references: [id])
+  order         Order               @relation(fields: [orderId], references: [id])
+  items         RefundRequestItem[]
+  audit         DecisionAudit?
+  reviewActions ReviewAction[]
+
+  // Dashboard queries: "latest requests", "pending review queue",
+  // "this customer's recent requests" (repeat-requester rule).
+  @@index([createdAt])
+  @@index([status, createdAt])
+  @@index([customerId, createdAt])
+}
+
+model RefundRequestItem {
+  id              String @id @default(uuid()) @db.Uuid
+  refundRequestId String @db.Uuid
+  orderItemId     String @db.Uuid
+  quantity        Int
+
+  refundRequest RefundRequest @relation(fields: [refundRequestId], references: [id])
+  orderItem     OrderItem     @relation(fields: [orderItemId], references: [id])
+
+  @@unique([refundRequestId, orderItemId])
+}
+
+// ─── 3. The paper trail (insert-only) ────────────────────────
+
+// One row per decision. Never updated: if a human overrides the
+// verdict, that is a new ReviewAction row, not an edit here.
+model DecisionAudit {
+  id              String   @id @default(uuid()) @db.Uuid
+  refundRequestId String   @unique @db.Uuid
+  extractedClaims Json?
+  injectionSignals String[]
+  rulesTriggered  String[]
+  decidingRule    String
+  aiProvider      String
+  model           String?
+  promptVersion   String?
+  aiFallbackUsed  Boolean  @default(false)
+  latencyMs       Int
+  tokensIn        Int?
+  tokensOut       Int?
+  createdAt       DateTime @default(now())
+
+  refundRequest RefundRequest @relation(fields: [refundRequestId], references: [id])
+}
+
+// A human reviewer's decision on an escalated request.
+model ReviewAction {
+  id              String         @id @default(uuid()) @db.Uuid
+  refundRequestId String         @db.Uuid
+  decision        ReviewDecision
+  reviewerName    String
+  note            String         @db.Text
+  createdAt       DateTime       @default(now())
+
+  refundRequest RefundRequest @relation(fields: [refundRequestId], references: [id])
+
+  @@index([refundRequestId, createdAt])
+}
