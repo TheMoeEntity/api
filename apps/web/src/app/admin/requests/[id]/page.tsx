@@ -62,15 +62,17 @@ export default async function RefundDetailPage({ params }: IdPageProps) {
         </div>
 
         <div className="space-y-6">
+          {detail.status === "PENDING_REVIEW" && (
+            <div id="review" className="scroll-mt-6">
+              <Card title="Your decision is needed">
+                <ReviewForm refundId={detail.id} />
+              </Card>
+            </div>
+          )}
+
           <Card title="How this was decided">
             {detail.audit ? <DecisionTrace audit={detail.audit} /> : <p className="text-sm text-stone-500">Historical record, imported before this system existed.</p>}
           </Card>
-
-          {detail.status === "PENDING_REVIEW" && (
-            <Card title="Human review">
-              <ReviewForm refundId={detail.id} />
-            </Card>
-          )}
 
           {detail.reviewActions.length > 0 && (
             <Card title="Review history">

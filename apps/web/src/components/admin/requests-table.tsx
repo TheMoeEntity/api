@@ -46,7 +46,16 @@ export function RequestsTable({ rows }: RequestsTableProps) {
               <td className="py-2.5 pr-4 text-stone-600">{row.decidingRule ? ruleLabel(row.decidingRule) : "Imported"}</td>
               <td className="py-2.5 pr-4"><VerdictBadge verdict={row.verdict} /></td>
               <td className="py-2.5">
-                <Badge tone={row.status === "PENDING_REVIEW" ? "warning" : "neutral"}>{STATUS_LABEL[row.status]}</Badge>
+                {row.status === "PENDING_REVIEW" ? (
+                  <Link
+                    href={`/admin/requests/${row.id}#review`}
+                    className="inline-flex items-center rounded-md bg-stone-900 px-2.5 py-1 text-xs font-medium text-white hover:bg-stone-700"
+                  >
+                    Review →
+                  </Link>
+                ) : (
+                  <Badge tone="neutral">{STATUS_LABEL[row.status]}</Badge>
+                )}
               </td>
             </tr>
           ))}
