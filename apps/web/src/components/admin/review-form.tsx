@@ -21,11 +21,12 @@ export function ReviewForm({ refundId }: ReviewFormProps) {
         <legend className="sr-only">Decision</legend>
         {(["APPROVE", "DENY"] as const).map((decision) => (
           <label key={decision} className="flex flex-1 cursor-pointer items-center gap-2 rounded-lg border border-stone-200 px-3 py-2 has-[:checked]:border-indigo-500 has-[:checked]:bg-indigo-50/50">
-            <input type="radio" name="decision" value={decision} defaultChecked={decision === "APPROVE"} />
+            <input type="radio" name="decision" value={decision} required />
             {decision === "APPROVE" ? "Approve refund" : "Deny refund"}
           </label>
         ))}
       </fieldset>
+      <FieldError messages={fieldErrors?.decision} />
       <label className="block">
         <span className="text-xs font-medium text-stone-500">Your name</span>
         <input name="reviewerName" className="mt-1 block w-full rounded-lg border border-stone-300 px-3 py-2 focus:border-indigo-500 focus:outline-none" />
