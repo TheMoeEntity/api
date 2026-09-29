@@ -10,6 +10,7 @@
     "build:shared": "pnpm --filter @refund-desk/shared build",
     "typecheck": "pnpm build:shared && pnpm -r typecheck",
     "test": "pnpm build:shared && pnpm --filter @refund-desk/api test",
-    "dev:api": "pnpm build:shared && pnpm --filter @refund-desk/api dev"
+    "dev:api": "pnpm build:shared && pnpm --filter @refund-desk/api dev",
+    "dev:web": "pnpm build:shared && pnpm --filter @refund-desk/web dev"
   }
 }

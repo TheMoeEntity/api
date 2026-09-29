@@ -1,4 +1,4 @@
-# One command: `docker compose up --build`
+# One command: `docker compose up --build`, then open http://localhost:3000
 #
 # Every variable has a default, so this runs with NO .env file at all.
 # Without an ANTHROPIC_API_KEY, the API uses its built-in mock AI provider.
@@ -48,7 +48,19 @@ services:
       retries: 20
       start_period: 15s
 
-  # web (Next.js) is added on Monday and will depend on api: service_healthy.
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    depends_on:
+      api:
+        condition: service_healthy
+    environment:
+      # Server-to-server inside Docker's network. The browser only ever talks to :3000.
+      API_URL: http://api:4000
+      ADMIN_API_KEY: ${ADMIN_API_KEY:-local-dev-admin-key}
+    ports:
+      - "3000:3000"
 
 volumes:
   db-data:

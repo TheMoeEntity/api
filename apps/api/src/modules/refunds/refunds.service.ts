@@ -2,7 +2,10 @@ import type { CreateRefundRequestInput, RefundDecisionDto } from "@refund-desk/s
 
 import { AiGateway } from "../../ai/ai.gateway.js";
 import { NEXT_STEPS } from "../../ai/templates/reply.templates.js";
-import { ActiveRefundExistsError } from "../../common/errors/active-refund-exists-error.js";
+import {
+  ACTIVE_REFUND_EXISTS_MESSAGE,
+  ActiveRefundExistsError,
+} from "../../common/errors/active-refund-exists-error.js";
 import { AppError } from "../../common/errors/app-error.js";
 import { DuplicateIdempotencyKeyError } from "../../common/errors/duplicate-idempotency-key-error.js";
 import { daysAgo } from "../../common/utils/date.utils.js";
@@ -37,7 +40,6 @@ export class RefundService {
 
     // 1. Facts from the database, scoped to this customer.
     const order = await this.refunds.findCustomerOrder(input.customerId, input.orderId);
-    // we return 404 and not 403 because we don't want to leak the fact that an order exists to prevent account enumeration attacks.
     if (!order) throw AppError.notFound("Order not found for this customer");
 
     const selected = resolveSelectedItems(order.items, input.items);
@@ -46,7 +48,7 @@ export class RefundService {
     // Fast path: reject obvious duplicates before paying for AI calls.
     // Not race-proof on its own; createDecision re-checks under a lock.
     if (await this.refunds.hasActiveRefundForItems(selectedIds)) {
-      throw AppError.conflict(new ActiveRefundExistsError().message);
+      throw AppError.conflict(ACTIVE_REFUND_EXISTS_MESSAGE);
     }
 
     const refundAmountCents = sumLineCents(

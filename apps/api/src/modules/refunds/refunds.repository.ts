@@ -52,8 +52,9 @@ export class RefundRepository implements RefundRepositoryPort {
     });
   }
 
-  hasActiveRefundForItems(orderItemIds: string[]): Promise<boolean> {
-    return countActiveRefunds(this.prisma, orderItemIds).then((count) => count > 0);
+  async hasActiveRefundForItems(orderItemIds: string[]): Promise<boolean> {
+    const count = await countActiveRefunds(this.prisma, orderItemIds);
+    return count > 0;
   }
 
   /**
